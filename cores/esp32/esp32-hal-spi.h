@@ -38,10 +38,10 @@ extern "C" {
 #define SPI_CLOCK_DIV64   0x027c1001 //250 KHz
 #define SPI_CLOCK_DIV128  0x04fc1001 //125 KHz
 
-#define SPI_MODE0 0
-#define SPI_MODE1 1
-#define SPI_MODE2 2
-#define SPI_MODE3 3
+#define SPI_MODE0 0x00
+#define SPI_MODE1 0x01
+#define SPI_MODE2 0x10
+#define SPI_MODE3 0x11
 
 #define SPI_CS0 0
 #define SPI_CS1 1
