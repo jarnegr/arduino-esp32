@@ -184,6 +184,11 @@ bool VFSImpl::rmdir(const char *path)
         return false;
     }
 
+    if (strcmp(_mountpoint, "/spiffs") == 0) {
+        log_e("rmdir is unnecessary in SPIFFS");
+        return false;
+    }
+
     VFSFileImpl f(this, path, "r");
     if(!f || !f.isDirectory()) {
         if(f) {
@@ -200,7 +205,7 @@ bool VFSImpl::rmdir(const char *path)
         return false;
     }
     sprintf(temp,"%s%s", _mountpoint, path);
-    auto rc = unlink(temp);
+    auto rc = ::rmdir(temp);
     free(temp);
     return rc == 0;
 }
@@ -295,6 +300,11 @@ VFSFileImpl::operator bool()
     return (_isDirectory && _d != NULL) || _f != NULL;
 }
 
+time_t VFSFileImpl::getLastWrite() {
+    _getStat() ;
+    return _stat.st_mtime;
+}
+
 void VFSFileImpl::_getStat() const
 {
     if(!_path) {
@@ -335,6 +345,8 @@ void VFSFileImpl::flush()
         return;
     }
     fflush(_f);
+    // workaround for https://github.com/espressif/arduino-esp32/issues/1293
+    fsync(fileno(_f));
 }
 
 bool VFSFileImpl::seek(uint32_t pos, SeekMode mode)
