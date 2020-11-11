@@ -13,10 +13,14 @@
  */
 #include "sdkconfig.h"
 #if defined(CONFIG_BT_ENABLED)
+#include <esp_log.h>
 #include <sstream>
 #include "BLEAdvertisedDevice.h"
 #include "BLEUtils.h"
+#ifdef ARDUINO_ARCH_ESP32
 #include "esp32-hal-log.h"
+#endif
+static const char* LOG_TAG="BLEAdvertisedDevice";
 
 BLEAdvertisedDevice::BLEAdvertisedDevice() {
 	m_adFlag           = 0;
@@ -25,8 +29,7 @@ BLEAdvertisedDevice::BLEAdvertisedDevice() {
 	m_manufacturerData = "";
 	m_name             = "";
 	m_rssi             = -9999;
-	m_serviceData      = {};
-	m_serviceDataUUIDs = {};
+	m_serviceData      = "";
 	m_txPower          = 0;
 	m_pScan            = nullptr;
 
@@ -102,64 +105,31 @@ BLEScan* BLEAdvertisedDevice::getScan() {
 	return m_pScan;
 } // getScan
 
-/**
- * @brief Get the number of service data.
- * @return Number of service data discovered.
- */
-int BLEAdvertisedDevice::getServiceDataCount() {
-	if (m_haveServiceData)
-		return m_serviceData.size();
-	else
-		return 0;
-
-} //getServiceDataCount
 
 /**
  * @brief Get the service data.
  * @return The ServiceData of the advertised device.
  */
 std::string BLEAdvertisedDevice::getServiceData() {
-	return m_serviceData[0];
+	return m_serviceData;
 } //getServiceData
 
-/**
- * @brief Get the service data.
- * @return The ServiceData of the advertised device.
- */
-std::string BLEAdvertisedDevice::getServiceData(int i) {
-	return m_serviceData[i];
-} //getServiceData
 
 /**
  * @brief Get the service data UUID.
  * @return The service data UUID.
  */
 BLEUUID BLEAdvertisedDevice::getServiceDataUUID() {
-	return m_serviceDataUUIDs[0];
+	return m_serviceDataUUID;
 } // getServiceDataUUID
 
-/**
- * @brief Get the service data UUID.
- * @return The service data UUID.
- */
-BLEUUID BLEAdvertisedDevice::getServiceDataUUID(int i) {
-	return m_serviceDataUUIDs[i];
-} // getServiceDataUUID
 
 /**
  * @brief Get the Service UUID.
  * @return The Service UUID of the advertised device.
  */
-BLEUUID BLEAdvertisedDevice::getServiceUUID() {
+BLEUUID BLEAdvertisedDevice::getServiceUUID() {  //TODO Remove it eventually, is no longer useful
 	return m_serviceUUIDs[0];
-} // getServiceUUID
-
-/**
- * @brief Get the Service UUID.
- * @return The Service UUID of the advertised device.
- */
-BLEUUID BLEAdvertisedDevice::getServiceUUID(int i) {
-	return m_serviceUUIDs[i];
 } // getServiceUUID
 
 /**
@@ -167,8 +137,9 @@ BLEUUID BLEAdvertisedDevice::getServiceUUID(int i) {
  * @return Return true if service is advertised
  */
 bool BLEAdvertisedDevice::isAdvertisingService(BLEUUID uuid){
-	for (int i = 0; i < m_serviceUUIDs.size(); i++) {
-		if (m_serviceUUIDs[i].equals(uuid)) return true;
+	for (int i = 0; i < m_serviceUUIDs.size(); ++i) {
+		if(m_serviceUUIDs[i].equals(uuid))
+			return true;
 	}
 	return false;
 }
@@ -258,13 +229,11 @@ bool BLEAdvertisedDevice::haveTXPower() {
  *
  * https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile
  */
-void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload, size_t total_len) {
+void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload) {
 	uint8_t length;
 	uint8_t ad_type;
 	uint8_t sizeConsumed = 0;
 	bool finished = false;
-	m_payload = payload;
-	m_payloadLength = total_len;
 
 	while(!finished) {
 		length = *payload;          // Retrieve the length of the record.
@@ -277,7 +246,7 @@ void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload, size_t total_len)
 			length--;
 
 			char* pHex = BLEUtils::buildHexData(nullptr, payload, length);
-			log_d("Type: 0x%.2x (%s), length: %d, data: %s",
+			ESP_LOGD(LOG_TAG, "Type: 0x%.2x (%s), length: %d, data: %s",
 					ad_type, BLEUtils::advTypeToString(ad_type), length, pHex);
 			free(pHex);
 
@@ -305,7 +274,7 @@ void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload, size_t total_len)
 				case ESP_BLE_AD_TYPE_16SRV_CMPL:
 				case ESP_BLE_AD_TYPE_16SRV_PART: {   // Adv Data Type: 0x02
 					for (int var = 0; var < length/2; ++var) {
-						setServiceUUID(BLEUUID(*reinterpret_cast<uint16_t*>(payload + var * 2)));
+						setServiceUUID(BLEUUID(*reinterpret_cast<uint16_t*>(payload+var*2)));
 					}
 					break;
 				} // ESP_BLE_AD_TYPE_16SRV_PART
@@ -313,7 +282,7 @@ void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload, size_t total_len)
 				case ESP_BLE_AD_TYPE_32SRV_CMPL:
 				case ESP_BLE_AD_TYPE_32SRV_PART: {   // Adv Data Type: 0x04
 					for (int var = 0; var < length/4; ++var) {
-						setServiceUUID(BLEUUID(*reinterpret_cast<uint32_t*>(payload + var * 4)));
+						setServiceUUID(BLEUUID(*reinterpret_cast<uint32_t*>(payload+var*4)));
 					}
 					break;
 				} // ESP_BLE_AD_TYPE_32SRV_PART
@@ -336,45 +305,45 @@ void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload, size_t total_len)
 
 				case ESP_BLE_AD_TYPE_SERVICE_DATA: {  // Adv Data Type: 0x16 (Service Data) - 2 byte UUID
 					if (length < 2) {
-						log_e("Length too small for ESP_BLE_AD_TYPE_SERVICE_DATA");
+						ESP_LOGE(LOG_TAG, "Length too small for ESP_BLE_AD_TYPE_SERVICE_DATA");
 						break;
 					}
-					uint16_t uuid = *(uint16_t*)payload;
+					uint16_t uuid = *(uint16_t *)payload;
 					setServiceDataUUID(BLEUUID(uuid));
 					if (length > 2) {
-						setServiceData(std::string(reinterpret_cast<char*>(payload + 2), length - 2));
+						setServiceData(std::string(reinterpret_cast<char*>(payload+2), length-2));
 					}
 					break;
 				} //ESP_BLE_AD_TYPE_SERVICE_DATA
 
 				case ESP_BLE_AD_TYPE_32SERVICE_DATA: {  // Adv Data Type: 0x20 (Service Data) - 4 byte UUID
 					if (length < 4) {
-						log_e("Length too small for ESP_BLE_AD_TYPE_32SERVICE_DATA");
+						ESP_LOGE(LOG_TAG, "Length too small for ESP_BLE_AD_TYPE_32SERVICE_DATA");
 						break;
 					}
-					uint32_t uuid = *(uint32_t*) payload;
+					uint32_t uuid = *(uint32_t *)payload;
 					setServiceDataUUID(BLEUUID(uuid));
 					if (length > 4) {
-						setServiceData(std::string(reinterpret_cast<char*>(payload + 4), length - 4));
+						setServiceData(std::string(reinterpret_cast<char*>(payload+4), length-4));
 					}
 					break;
 				} //ESP_BLE_AD_TYPE_32SERVICE_DATA
 
 				case ESP_BLE_AD_TYPE_128SERVICE_DATA: {  // Adv Data Type: 0x21 (Service Data) - 16 byte UUID
 					if (length < 16) {
-						log_e("Length too small for ESP_BLE_AD_TYPE_128SERVICE_DATA");
+						ESP_LOGE(LOG_TAG, "Length too small for ESP_BLE_AD_TYPE_128SERVICE_DATA");
 						break;
 					}
 
 					setServiceDataUUID(BLEUUID(payload, (size_t)16, false));
 					if (length > 16) {
-						setServiceData(std::string(reinterpret_cast<char*>(payload + 16), length - 16));
+						setServiceData(std::string(reinterpret_cast<char*>(payload+16), length-16));
 					}
 					break;
 				} //ESP_BLE_AD_TYPE_32SERVICE_DATA
 
 				default: {
-					log_d("Unhandled type: adType: %d - 0x%.2x", ad_type, ad_type);
+					ESP_LOGD(LOG_TAG, "Unhandled type: adType: %d - 0x%.2x", ad_type, ad_type);
 					break;
 				}
 			} // switch
@@ -382,21 +351,12 @@ void BLEAdvertisedDevice::parseAdvertisement(uint8_t* payload, size_t total_len)
 		} // Length <> 0
 
 
-		if (sizeConsumed >= total_len)
+		if (sizeConsumed >=31 || length == 0) {
 			finished = true;
-
+		}
 	} // !finished
 } // parseAdvertisement
 
-/**
- * @brief Parse the advertising payload.
- * @param [in] payload The payload of the advertised device.
- * @param [in] total_len The length of payload
- */
-void BLEAdvertisedDevice::setPayload(uint8_t* payload, size_t total_len) {
-	m_payload = payload;
-	m_payloadLength = total_len;
-} // setPayload
 
 /**
  * @brief Set the address of the advertised device.
@@ -423,7 +383,7 @@ void BLEAdvertisedDevice::setAdFlag(uint8_t adFlag) {
 void BLEAdvertisedDevice::setAppearance(uint16_t appearance) {
 	m_appearance     = appearance;
 	m_haveAppearance = true;
-	log_d("- appearance: %d", m_appearance);
+	ESP_LOGD(LOG_TAG, "- appearance: %d", m_appearance);
 } // setAppearance
 
 
@@ -434,8 +394,8 @@ void BLEAdvertisedDevice::setAppearance(uint16_t appearance) {
 void BLEAdvertisedDevice::setManufacturerData(std::string manufacturerData) {
 	m_manufacturerData     = manufacturerData;
 	m_haveManufacturerData = true;
-	char* pHex = BLEUtils::buildHexData(nullptr, (uint8_t*) m_manufacturerData.data(), (uint8_t) m_manufacturerData.length());
-	log_d("- manufacturer data: %s", pHex);
+	char* pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)m_manufacturerData.data(), (uint8_t)m_manufacturerData.length());
+	ESP_LOGD(LOG_TAG, "- manufacturer data: %s", pHex);
 	free(pHex);
 } // setManufacturerData
 
@@ -447,7 +407,7 @@ void BLEAdvertisedDevice::setManufacturerData(std::string manufacturerData) {
 void BLEAdvertisedDevice::setName(std::string name) {
 	m_name     = name;
 	m_haveName = true;
-	log_d("- setName(): name: %s", m_name.c_str());
+	ESP_LOGD(LOG_TAG, "- setName(): name: %s", m_name.c_str());
 } // setName
 
 
@@ -458,7 +418,7 @@ void BLEAdvertisedDevice::setName(std::string name) {
 void BLEAdvertisedDevice::setRSSI(int rssi) {
 	m_rssi     = rssi;
 	m_haveRSSI = true;
-	log_d("- setRSSI(): rssi: %d", m_rssi);
+	ESP_LOGD(LOG_TAG, "- setRSSI(): rssi: %d", m_rssi);
 } // setRSSI
 
 
@@ -487,7 +447,7 @@ void BLEAdvertisedDevice::setServiceUUID(const char* serviceUUID) {
 void BLEAdvertisedDevice::setServiceUUID(BLEUUID serviceUUID) {
 	m_serviceUUIDs.push_back(serviceUUID);
 	m_haveServiceUUID = true;
-	log_d("- addServiceUUID(): serviceUUID: %s", serviceUUID.toString().c_str());
+	ESP_LOGD(LOG_TAG, "- addServiceUUID(): serviceUUID: %s", serviceUUID.toString().c_str());
 } // setServiceUUID
 
 
@@ -497,7 +457,7 @@ void BLEAdvertisedDevice::setServiceUUID(BLEUUID serviceUUID) {
  */
 void BLEAdvertisedDevice::setServiceData(std::string serviceData) {
 	m_haveServiceData = true;         // Set the flag that indicates we have service data.
-	m_serviceData.push_back(serviceData); // Save the service data that we received.
+	m_serviceData     = serviceData;  // Save the service data that we received.
 } //setServiceData
 
 
@@ -507,8 +467,7 @@ void BLEAdvertisedDevice::setServiceData(std::string serviceData) {
  */
 void BLEAdvertisedDevice::setServiceDataUUID(BLEUUID uuid) {
 	m_haveServiceData = true;         // Set the flag that indicates we have service data.
-	m_serviceDataUUIDs.push_back(uuid);
-	log_d("- addServiceDataUUID(): serviceDataUUID: %s", uuid.toString().c_str());
+	m_serviceDataUUID = uuid;
 } // setServiceDataUUID
 
 
@@ -519,7 +478,7 @@ void BLEAdvertisedDevice::setServiceDataUUID(BLEUUID uuid) {
 void BLEAdvertisedDevice::setTXPower(int8_t txPower) {
 	m_txPower     = txPower;
 	m_haveTXPower = true;
-	log_d("- txPower: %d", m_txPower);
+	ESP_LOGD(LOG_TAG, "- txPower: %d", m_txPower);
 } // setTXPower
 
 
@@ -528,48 +487,27 @@ void BLEAdvertisedDevice::setTXPower(int8_t txPower) {
  * @return A string representation of this device.
  */
 std::string BLEAdvertisedDevice::toString() {
-	std::string res = "Name: " + getName() + ", Address: " + getAddress().toString();
+	std::stringstream ss;
+	ss << "Name: " << getName() << ", Address: " << getAddress().toString();
 	if (haveAppearance()) {
-		char val[6];
-		snprintf(val, sizeof(val), "%d", getAppearance());
-		res += ", appearance: ";
-		res += val;
+		ss << ", appearance: " << getAppearance();
 	}
 	if (haveManufacturerData()) {
 		char *pHex = BLEUtils::buildHexData(nullptr, (uint8_t*)getManufacturerData().data(), getManufacturerData().length());
-		res += ", manufacturer data: ";
-		res += pHex;
+		ss << ", manufacturer data: " << pHex;
 		free(pHex);
 	}
 	if (haveServiceUUID()) {
-		for (int i=0; i < m_serviceUUIDs.size(); i++) {
-		    res += ", serviceUUID: " + getServiceUUID(i).toString();
-		}
+		ss << ", serviceUUID: " << getServiceUUID().toString();
 	}
 	if (haveTXPower()) {
-		char val[4];
-		snprintf(val, sizeof(val), "%d", getTXPower());
-		res += ", txPower: ";
-		res += val;
+		ss << ", txPower: " << (int)getTXPower();
 	}
-	return res;
+	return ss.str();
 } // toString
 
-uint8_t* BLEAdvertisedDevice::getPayload() {
-	return m_payload;
-}
 
-esp_ble_addr_type_t BLEAdvertisedDevice::getAddressType() {
-	return m_addressType;
-}
 
-void BLEAdvertisedDevice::setAddressType(esp_ble_addr_type_t type) {
-	m_addressType = type;
-}
-
-size_t BLEAdvertisedDevice::getPayloadLength() {
-	return m_payloadLength;
-}
 
 #endif /* CONFIG_BT_ENABLED */
 

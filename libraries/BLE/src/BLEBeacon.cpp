@@ -7,11 +7,12 @@
 #include "sdkconfig.h"
 #if defined(CONFIG_BT_ENABLED)
 #include <string.h>
+#include <esp_log.h>
 #include "BLEBeacon.h"
-#include "esp32-hal-log.h"
 
 #define ENDIAN_CHANGE_U16(x) ((((x)&0xFF00)>>8) + (((x)&0xFF)<<8))
 
+static const char LOG_TAG[] = "BLEBeacon";
 
 BLEBeacon::BLEBeacon() {
 	m_beaconData.manufacturerId = 0x4c00;
@@ -24,7 +25,7 @@ BLEBeacon::BLEBeacon() {
 } // BLEBeacon
 
 std::string BLEBeacon::getData() {
-	return std::string((char*) &m_beaconData, sizeof(m_beaconData));
+	return std::string((char*)&m_beaconData, sizeof(m_beaconData));
 } // getData
 
 uint16_t BLEBeacon::getMajor() {
@@ -52,7 +53,7 @@ int8_t BLEBeacon::getSignalPower() {
  */
 void BLEBeacon::setData(std::string data) {
 	if (data.length() != sizeof(m_beaconData)) {
-		log_e("Unable to set the data ... length passed in was %d and expected %d", data.length(), sizeof(m_beaconData));
+		ESP_LOGE(LOG_TAG, "Unable to set the data ... length passed in was %d and expected %d", data.length(), sizeof(m_beaconData));
 		return;
 	}
 	memcpy(&m_beaconData, data.data(), sizeof(m_beaconData));

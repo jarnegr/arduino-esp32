@@ -21,7 +21,6 @@ public:
 	void setInitEncryptionKey(uint8_t init_key);
 	void setRespEncryptionKey(uint8_t resp_key);
 	void setKeySize(uint8_t key_size = 16);
-	void setStaticPIN(uint32_t pin);
 	static char* esp_key_type_to_str(esp_ble_key_type_t key_type);
 
 private:
@@ -30,7 +29,6 @@ private:
 	uint8_t m_initKey;
 	uint8_t m_respKey;
 	uint8_t m_keySize;
-
 }; // BLESecurity
 
 
@@ -53,20 +51,20 @@ public:
 	 * It requires that our device is capable to display this code to end user
 	 * @param
 	 */
-	virtual void onPassKeyNotify(uint32_t pass_key) = 0;
+	virtual void onPassKeyNotify(uint32_t pass_key);
 
 	/**
 	 * @brief Here we can make decision if we want to let negotiate authorization with peer device or not
 	 * return Return true if we accept this peer device request
 	 */
 
-	virtual bool onSecurityRequest() = 0 ;
+	virtual bool onSecurityRequest();
 	/**
 	 * Provide us information when authentication process is completed
 	 */
-	virtual void onAuthenticationComplete(esp_ble_auth_cmpl_t) = 0;
+	virtual void onAuthenticationComplete(esp_ble_auth_cmpl_t);
 
-	virtual bool onConfirmPIN(uint32_t pin) = 0;
+	virtual bool onConfirmPIN(uint32_t pin);
 }; // BLESecurityCallbacks
 
 #endif // CONFIG_BT_ENABLED

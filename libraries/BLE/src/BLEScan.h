@@ -11,8 +11,7 @@
 #if defined(CONFIG_BT_ENABLED)
 #include <esp_gap_ble_api.h>
 
-// #include <vector>
-#include <string>
+#include <vector>
 #include "BLEAdvertisedDevice.h"
 #include "BLEClient.h"
 #include "FreeRTOS.h"
@@ -38,7 +37,7 @@ public:
 
 private:
 	friend BLEScan;
-	std::map<std::string, BLEAdvertisedDevice*> m_vectorAdvertisedDevices;
+	std::vector<BLEAdvertisedDevice> m_vectorAdvertisedDevices;
 };
 
 /**
@@ -51,16 +50,11 @@ public:
 	void           setActiveScan(bool active);
 	void           setAdvertisedDeviceCallbacks(
 			              BLEAdvertisedDeviceCallbacks* pAdvertisedDeviceCallbacks,
-										bool wantDuplicates = false,
-										bool shouldParse = true);
+										bool wantDuplicates = false);
 	void           setInterval(uint16_t intervalMSecs);
 	void           setWindow(uint16_t windowMSecs);
-	bool           start(uint32_t duration, void (*scanCompleteCB)(BLEScanResults), bool is_continue = false);
-	BLEScanResults start(uint32_t duration, bool is_continue = false);
+	BLEScanResults start(uint32_t duration);
 	void           stop();
-	void 		   erase(BLEAddress address);
-	BLEScanResults getResults();
-	void			clearResults();
 
 private:
 	BLEScan();   // One doesn't create a new instance instead one asks the BLEDevice for the singleton.
@@ -72,13 +66,11 @@ private:
 
 
 	esp_ble_scan_params_t         m_scan_params;
-	BLEAdvertisedDeviceCallbacks* m_pAdvertisedDeviceCallbacks = nullptr;
-	bool                          m_stopped = true;
-	bool                          m_shouldParse = true;
+	BLEAdvertisedDeviceCallbacks* m_pAdvertisedDeviceCallbacks;
+	bool                          m_stopped;
 	FreeRTOS::Semaphore           m_semaphoreScanEnd = FreeRTOS::Semaphore("ScanEnd");
 	BLEScanResults                m_scanResults;
 	bool                          m_wantDuplicates;
-	void                        (*m_scanCompleteCB)(BLEScanResults scanResults);
 }; // BLEScan
 
 #endif /* CONFIG_BT_ENABLED */

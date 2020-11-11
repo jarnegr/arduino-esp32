@@ -6,8 +6,15 @@
  */
 #include "sdkconfig.h"
 #if defined(CONFIG_BT_ENABLED)
+
+#include <esp_log.h>
+
 #include "BLEValue.h"
+#ifdef ARDUINO_ARCH_ESP32
 #include "esp32-hal-log.h"
+#endif
+
+static const char* LOG_TAG="BLEValue";
 
 BLEValue::BLEValue() {
 	m_accumulation = "";
@@ -22,7 +29,7 @@ BLEValue::BLEValue() {
  * @param [in] part A message part being added.
  */
 void BLEValue::addPart(std::string part) {
-	log_v(">> addPart: length=%d", part.length());
+	ESP_LOGD(LOG_TAG, ">> addPart: length=%d", part.length());
 	m_accumulation += part;
 } // addPart
 
@@ -34,8 +41,8 @@ void BLEValue::addPart(std::string part) {
  * @param [in] length The number of bytes being added.
  */
 void BLEValue::addPart(uint8_t* pData, size_t length) {
-	log_v(">> addPart: length=%d", length);
-	m_accumulation += std::string((char*) pData, length);
+	ESP_LOGD(LOG_TAG, ">> addPart: length=%d", length);
+	m_accumulation += std::string((char *)pData, length);
 } // addPart
 
 
@@ -43,7 +50,7 @@ void BLEValue::addPart(uint8_t* pData, size_t length) {
  * @brief Cancel the current accumulation.
  */
 void BLEValue::cancel() {
-	log_v(">> cancel");
+	ESP_LOGD(LOG_TAG, ">> cancel");
 	m_accumulation = "";
 	m_readOffset   = 0;
 } // cancel
@@ -56,9 +63,11 @@ void BLEValue::cancel() {
  * we now have the complete message and commit the change as a unit.
  */
 void BLEValue::commit() {
-	log_v(">> commit");
+	ESP_LOGD(LOG_TAG, ">> commit");
 	// If there is nothing to commit, do nothing.
-	if (m_accumulation.length() == 0) return;
+	if (m_accumulation.length() == 0) {
+		return;
+	}
 	setValue(m_accumulation);
 	m_accumulation = "";
 	m_readOffset   = 0;
@@ -70,7 +79,7 @@ void BLEValue::commit() {
  * @return A pointer to the data.
  */
 uint8_t* BLEValue::getData() {
-	return (uint8_t*) m_value.data();
+	return (uint8_t*)m_value.data();
 }
 
 
@@ -123,8 +132,11 @@ void BLEValue::setValue(std::string value) {
  * @param [in] The length of the new current value.
  */
 void BLEValue::setValue(uint8_t* pData, size_t length) {
-	m_value = std::string((char*) pData, length);
+	m_value = std::string((char*)pData, length);
 } // setValue
+
+
+
 
 
 #endif // CONFIG_BT_ENABLED
